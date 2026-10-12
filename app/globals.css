@@ -1,0 +1,224 @@
+@import "tailwindcss";
+
+/*
+  Locked theme: one dark mode for the whole page.
+  One accent color (emerald) used consistently across every section.
+  Radius scale: cards 2rem, controls (buttons, chips) full pill.
+*/
+
+/* Wire the Geist faces loaded in app/layout.tsx into Tailwind's font utilities.
+   Without this block `font-sans` and `font-mono` fall back to Tailwind's
+   defaults, and the two downloaded fonts would never be used. */
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Shared section shell: gutters, vertical rhythm, and the offset that keeps a
+   heading clear of the fixed nav when it is scrolled to from an anchor. */
+@layer components {
+  .section {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 72rem;
+    padding-inline: 1.25rem;
+    padding-block: 5rem;
+    scroll-margin-top: 5.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .section {
+      padding-inline: 1.5rem;
+      padding-block: 6.5rem;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .section {
+      padding-block: 8rem;
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+  /* The page colour lives here, on the root, and nowhere else. The root
+     background propagates to the viewport and is painted at the very bottom,
+     which leaves the fixed plexus canvas (z-index -1) visible above it. If body
+     also carried an opaque background it would be painted as a normal box, on
+     top of the canvas, and the mesh would be completely hidden. */
+  background: #050507;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  /* Deliberately no background: see the note on html above. */
+  color: #ededf0;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(52, 211, 153, 0.28);
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+
+/* ---------------------------------------------------------------------------
+   Reveal on scroll.
+
+   Hand-rolled rather than done with an animation library: see Reveal.tsx. Two
+   compositor-only properties, so a revealed block never triggers layout or paint
+   work on the frames it animates.
+--------------------------------------------------------------------------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 0.7s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.7s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: opacity, transform;
+}
+
+.reveal[data-shown] {
+  opacity: 1;
+  transform: none;
+  /* Drop the compositor layer once it has arrived, so 19 of them are not held
+     in memory for the rest of the visit. */
+  will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Fine grain, on a fixed layer only so it never triggers repaints while scrolling. */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Dot pattern used to vary the background of bento cards. */
+.dot-grid {
+  background-image: radial-gradient(
+    rgba(52, 211, 153, 0.2) 1px,
+    transparent 1px
+  );
+  background-size: 18px 18px;
+}
+
+/* ---------------------------------------------------------------------------
+   Plexus background.
+
+   A canvas of drifting nodes joined by lines, fixed behind the whole page. It
+   is drawn in JS (see PlexusBackground.tsx); these rules only place it.
+
+   z-index -1 puts it above the body background but below every piece of content,
+   which is why no section needs its own stacking context.
+--------------------------------------------------------------------------- */
+.plexus {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  display: block;
+}
+
+/* Knocks the mesh further back so it reads as texture, never as a subject, and
+   warms the top-left corner with the site accent the way the reference does.
+   The gradient also deepens toward the bottom, which keeps body copy readable
+   wherever it happens to sit in the viewport. */
+.plexus-veil {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      75% 60% at 15% 4%,
+      rgba(52, 211, 153, 0.16) 0%,
+      rgba(52, 211, 153, 0.05) 38%,
+      rgba(5, 5, 7, 0) 66%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(5, 5, 7, 0.1) 0%,
+      rgba(5, 5, 7, 0.26) 50%,
+      rgba(5, 5, 7, 0.46) 100%
+    );
+}
+
+/* ---------------------------------------------------------------------------
+   Nav active fill.
+
+   One absolutely-positioned pill behind the nav links. Every entry has the same
+   width, so the fill never resizes and only its transform changes.
+
+   There is deliberately no CSS transition here. The movement is a spring
+   integrated in JavaScript (see Nav.tsx) so that retargeting mid-flight keeps
+   the velocity already built up. A CSS transition would restart from zero on
+   every new target, which shows up as a stall halfway through a long jump.
+--------------------------------------------------------------------------- */
+.nav-fill {
+  will-change: transform;
+}
+
+/* Mobile menu panel: a plain CSS fade-in, no animation library involved. */
+.nav-panel {
+  animation: nav-panel-in 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* Each link rides in on its own index, read from the --i custom property set in
+   the markup. `both` holds the start state during the delay, so nothing flashes
+   in place before its turn. */
+.nav-panel-item {
+  animation: nav-item-in 0.5s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation-delay: calc(var(--i, 0) * 0.06s);
+}
+
+@keyframes nav-panel-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes nav-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+/* A visitor who prefers reduced motion gets the menu instantly. */
+.nav-panel[data-reduce] {
+  animation: none;
+}
+
+.nav-panel[data-reduce] .nav-panel-item {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-panel,
+  .nav-panel-item {
+    animation: none;
+  }
+}
